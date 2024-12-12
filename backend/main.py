@@ -82,7 +82,7 @@ def encode_image(image_path, detection_method=DETECTION_METHOD):
     return encodings[0], boxes[0]
 
 # Function to perform PCA dimensionality reduction on face encodings
-def perform_pca(encodings, n_components=0.95):
+def perform_pca(encodings, n_components=0.90):
     if len(encodings) == 0:
         raise ValueError("No encodings to perform PCA.")
     pca = PCA(n_components=n_components, random_state=42)
@@ -99,12 +99,8 @@ def perform_label_propagation(encodings, labels):
     label_prop_model = LabelPropagation()
     label_prop_model.fit(encodings, labels)
     propagated_labels = label_prop_model.transduction_
-    # Compute accuracy on known labels
-    from sklearn.metrics import accuracy_score
-    known_mask = np.array(labels) != -1
-    accuracy = accuracy_score(np.array(labels)[known_mask], propagated_labels[known_mask])
-    logger.info(f"Label Propagation accuracy: {accuracy:.2f}")
-    return propagated_labels, accuracy
+    logger.info("Label Propagation transduction complete.")
+    return propagated_labels
 
 # Function to update training data
 import os
@@ -158,9 +154,8 @@ def update_training_data(image_path, encoding, label, dataset_training_folder, t
 # Batch Processing for label propagation
 async def process_label_propagation_batch(encodings_combined, labels_combined):
     reduced_data = perform_pca(encodings_combined)
-    propagated_labels, accuracy = perform_label_propagation(reduced_data, labels_combined)
-    return propagated_labels, accuracy
-
+    propagated_labels = perform_label_propagation(reduced_data, labels_combined)
+    return propagated_labels
 def clear_dataset_folder(dataset_folder):
     # Loop through files in the dataset folder
     for filename in os.listdir(dataset_folder):
@@ -200,25 +195,20 @@ async def upload_image(file: UploadFile = File(...), background_tasks: Backgroun
     if background_tasks:
         background_tasks.add_task(process_label_propagation_batch, encodings_combined, labels_combined)
     
-    propagated_labels, accuracy = await process_label_propagation_batch(encodings_combined, labels_combined)
+    propagated_labels = await process_label_propagation_batch(encodings_combined, labels_combined)
     
     predicted_label = propagated_labels[-1]
     predicted_label_name = label_encoder.inverse_transform([predicted_label])[0]
     
-    return {
-        "predicted_label": predicted_label_name,
-        "image_path": file_location,
-        "accuracy": accuracy
-    }
+    return {"predicted_label": predicted_label_name, "image_path": file_location}
 
 # FastAPI endpoint for confirming label
 @app.post("/confirm/")
 async def confirm_label(image_path: str = Form(...), label: str = Form(...)):
-     # Convert label to lowercase
-    label = label.lower()
     # Validate label using Pydantic
     label_data = ImageLabel(label=label)
-    
+    print(label)
+    print(label_data)
     encoding, loc = encode_image(image_path)
     if encoding is None or loc is None:
         return JSONResponse(status_code=400, content={"message": "No faces found in the image."})
@@ -236,3 +226,5 @@ if __name__ == "__main__":
 @app.get("/")
 async def start():
     return{'hello':'world'}
+
+
