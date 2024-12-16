@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-python-dotenv
-opencv-python
-scikit-learn
-face-recognition
-imutils
