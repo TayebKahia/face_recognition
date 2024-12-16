@@ -99,8 +99,9 @@ def perform_label_propagation(encodings, labels):
     label_prop_model = LabelPropagation()
     label_prop_model.fit(encodings, labels)
     propagated_labels = label_prop_model.transduction_
+    confidence_scores = label_prop_model.predict_proba(encodings)
     logger.info("Label Propagation transduction complete.")
-    return propagated_labels
+    return propagated_labels, confidence_scores
 
 # Function to update training data
 import os
@@ -195,13 +196,13 @@ async def upload_image(file: UploadFile = File(...), background_tasks: Backgroun
     if background_tasks:
         background_tasks.add_task(process_label_propagation_batch, encodings_combined, labels_combined)
     
-    propagated_labels = await process_label_propagation_batch(encodings_combined, labels_combined)
+    propagated_labels, confidence_scores = await process_label_propagation_batch(encodings_combined, labels_combined)
     
     predicted_label = propagated_labels[-1]
     predicted_label_name = label_encoder.inverse_transform([predicted_label])[0]
+    confidence_score = confidence_scores[-1][predicted_label]
     
-    return {"predicted_label": predicted_label_name, "image_path": file_location}
-
+    return {"predicted_label": predicted_label_name, "confidence_score": confidence_score, "image_path": file_location}
 # FastAPI endpoint for confirming label
 @app.post("/confirm/")
 async def confirm_label(image_path: str = Form(...), label: str = Form(...)):
@@ -218,9 +219,10 @@ async def confirm_label(image_path: str = Form(...), label: str = Form(...)):
     return {"message": "Training data updated successfully."}
 
 # Run the FastAPI app
-if __name__ == "__main__":
+if __name__ != "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 
 @app.get("/")
@@ -228,3 +230,35 @@ async def start():
     return{'hello':'world'}
 
 
+# ...existing code...
+
+@app.post('/reset_training/')
+def reset_training():
+    import os
+    import shutil
+
+    # Delete all files in dataset folder
+    dataset_folder = 'dataset'
+    for filename in os.listdir(dataset_folder):
+        file_path = os.path.join(dataset_folder, filename)
+        if os.path.isfile(file_path) or os.path.islink(file_path):
+            os.unlink(file_path)
+
+    # Delete all images in dataset_training
+    dataset_training_folder = 'dataset_training'
+    for filename in os.listdir(dataset_training_folder):
+        file_path = os.path.join(dataset_training_folder, filename)
+        if os.path.isfile(file_path) or os.path.islink(file_path):
+            os.unlink(file_path)
+
+    # Copy all images from dataset_reserve into dataset_training
+    dataset_reserve_folder = 'dataset_reserve'
+    for filename in os.listdir(dataset_reserve_folder):
+        src_file = os.path.join(dataset_reserve_folder, filename)
+        dst_file = os.path.join(dataset_training_folder, filename)
+        shutil.copy2(src_file, dst_file)
+
+    # Run the command
+    os.system("python ./create_training_encodings.py -d dataset_training -o train.pickle -m cnn")
+
+    return 'Training reset successful', 200
