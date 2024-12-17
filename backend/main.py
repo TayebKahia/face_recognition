@@ -16,8 +16,12 @@ from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 import imghdr
 
-# Load environment variables
-load_dotenv()
+
+# Set constants
+DATASET_FOLDER = 'dataset'
+DATASET_TRAINING_FOLDER = 'dataset_training'
+TRAINING_DATASET_PATH = 'train.pickle'
+DETECTION_METHOD = 'cnn'
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -32,12 +36,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Externalize configuration via environment variables
-DATASET_FOLDER = os.getenv("DATASET_FOLDER", "dataset")
-DATASET_TRAINING_FOLDER = os.getenv("DATASET_TRAINING_FOLDER", "dataset_training")
-TRAINING_DATASET_PATH = os.getenv("TRAINING_DATASET_PATH", "train.pickle")
-DETECTION_METHOD = os.getenv("DETECTION_METHOD", "cnn")
 
 # Pydantic model for input validation
 class ImageLabel(BaseModel):
